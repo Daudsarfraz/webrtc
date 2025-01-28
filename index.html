@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Stream</title>
+</head>
+<body>
+    <h2>WebRTC Stream</h2>
+    <video id="video" autoplay></video>
+
+    <script>
+        const videoElement = document.getElementById("video");
+        const pc = new RTCPeerConnection();
+
+        // Handle incoming tracks
+        pc.ontrack = (event) => {
+            if (event.streams && event.streams[0]) {
+                videoElement.srcObject = event.streams[0];
+                console.log("Stream set successfully");
+            } else {
+                console.error("No streams found in the event");
+            }
+        };
+
+        // Handle ICE candidates
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log("ICE Candidate:", event.candidate);
+                // Send the candidate to the server
+                fetch("http://localhost:8080/ice-candidate", {
+                    method: "POST",
+                    body: JSON.stringify({ candidate: event.candidate }),
+                    headers: { "Content-Type": "application/json" }
+                });
+            }
+        };
+
+        // Create an offer and send it to the server
+        pc.createOffer()
+            .then((offer) => {
+                console.log("Offer:", offer);
+                return pc.setLocalDescription(offer);
+            })
+            .then(() => {
+                fetch("http://localhost:8080/offer", {
+                    method: "POST",
+                    body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+                    headers: { "Content-Type": "application/json" }
+                });
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("Received answer:", data);
+                return pc.setRemoteDescription(new RTCSessionDescription(data));
+            })
+            .catch(err => console.error("Error during WebRTC setup:", err));
+    </script>
+</body>
+</html>
