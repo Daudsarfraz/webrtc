@@ -74,7 +74,7 @@ class GStreamerTrack(VideoStreamTrack):
             # Convert the Gst buffer to a numpy array
             frame_data = frame.extract_dup(0, frame.get_size())
             frame_image = np.ndarray(
-                (480, 640, 3),  # Ensure correct shape (height, width, channels)
+                (240, 320, 3),  # Ensure correct shape (height, width, channels)
                 dtype=np.uint8,
                 buffer=frame_data,
             )
@@ -224,7 +224,7 @@ async def display_frame(rtsp_url):
         frame = await video_track.recv()
 
         if frame is not None:
-            frame_resized = cv2.resize(frame.to_ndarray(format="bgr24"), (640, 480))
+            frame_resized = cv2.resize(frame.to_ndarray(format="bgr24"), (240, 320))
             cv2.imshow("RTSP Stream", frame_resized)
 
             # Check for 'q' key press to exit the loop
