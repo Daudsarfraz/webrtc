@@ -149,7 +149,7 @@ async def offer(request):
             await pc.close()
             pcs.discard(pc)
 
-    rtsp_url = "rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"
+    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0" # "rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"
     video_track = GStreamerTrack(rtsp_url)
     pc.addTrack(video_track)
 
@@ -195,6 +195,8 @@ async def offer(request):
     return web.json_response(
         {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
     )
+
+
 async def on_shutdown(app):
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
@@ -224,7 +226,7 @@ app.router.add_post("/offer", offer)
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    rtsp_url = "rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"#"rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"
+    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0" #"rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"#"rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"
     loop = asyncio.get_event_loop()
     #loop.create_task(display_frame(rtsp_url))
     web.run_app(app, port=8080)
