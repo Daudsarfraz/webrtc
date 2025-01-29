@@ -6,11 +6,11 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaStreamError
 import gi
 import numpy as np
-import av 
+import av
 from av.video.frame import VideoFrame
 
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst #, GLib
+from gi.repository import Gst
 
 # Initialize GStreamer
 Gst.init(None)
@@ -63,32 +63,33 @@ class GStreamerTrack(VideoStreamTrack):
 
         return Gst.FlowReturn.OK
 
-async def recv(self):
-    try:
-        frame = await self.queue.get()
-        logging.debug("Frame retrieved from queue.")
+    async def recv(self):
+        try:
+            frame = await self.queue.get()
+            logging.debug("Frame retrieved from queue.")
 
-        # Convert the Gst buffer to a numpy array
-        frame_data = frame.extract_dup(0, frame.get_size())
-        frame_image = np.ndarray(
-            (480, 640, 3),  # Ensure correct shape
-            dtype=np.uint8,
-            buffer=frame_data,
-        )
+            # Convert the Gst buffer to a numpy array
+            frame_data = frame.extract_dup(0, frame.get_size())
+            frame_image = np.ndarray(
+                (480, 640, 3),  # Ensure correct shape
+                dtype=np.uint8,
+                buffer=frame_data,
+            )
 
-        # Convert to aiortc-compatible VideoFrame
-        video_frame = VideoFrame.from_ndarray(frame_image, format="yuv420p")
+            # Convert to aiortc-compatible VideoFrame
+            video_frame = VideoFrame.from_ndarray(frame_image, format="yuv420p")
 
-        # Ensure correct timestamps
-        video_frame.pts = None  # You can adjust the timestamp logic
-        video_frame.time_base = "1/90000"  # Standard for WebRTC
+            # Ensure correct timestamps
+            video_frame.pts = None  # You can adjust the timestamp logic
+            video_frame.time_base = "1/90000"  # Standard for WebRTC
 
-        return video_frame
+            return video_frame
 
-    except MediaStreamError:
-        logging.error("MediaStreamError: Stopping pipeline.")
-        self.pipeline.set_state(Gst.State.NULL)
-        raise
+        except MediaStreamError:
+            logging.error("MediaStreamError: Stopping pipeline.")
+            self.pipeline.set_state(Gst.State.NULL)
+            raise
+
 
 async def index(request):
     html = """
@@ -149,7 +150,7 @@ async def offer(request):
             await pc.close()
             pcs.discard(pc)
 
-    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0" # "rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"
+    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0" # Replace with actual URL
     video_track = GStreamerTrack(rtsp_url)
     pc.addTrack(video_track)
 
@@ -159,8 +160,12 @@ async def offer(request):
         logging.debug(f"New track received: {track.kind}")
 
     # Set up the remote description
-    offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
-    await pc.setRemoteDescription(offer)
+    try:
+        offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+        await pc.setRemoteDescription(offer)
+    except Exception as e:
+        logging.error(f"Error setting remote description: {e}")
+        raise
 
     # Explicitly set direction for each transceiver
     for transceiver in pc.getTransceivers():
@@ -179,15 +184,15 @@ async def offer(request):
     try:
         # Create the answer
         answer = await pc.createAnswer()
+        logging.debug(f"Created answer: {answer.sdp}")
     except Exception as e:
         logging.error(f"Error creating answer: {e}")
         raise
 
-    logging.debug(f"Created answer: {answer.sdp}")
-
     try:
         # Set the local description with the answer
         await pc.setLocalDescription(answer)
+        logging.debug(f"Set local description: {answer.sdp}")
     except Exception as e:
         logging.error(f"Error setting local description: {e}")
         raise
@@ -226,7 +231,7 @@ app.router.add_post("/offer", offer)
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0" #"rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"#"rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"
+    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with actual RTSP URL
     loop = asyncio.get_event_loop()
-    #loop.create_task(display_frame(rtsp_url))
+    # loop.create_task(display_frame(rtsp_url))  # Uncomment to display frames using OpenCV
     web.run_app(app, port=8080)
