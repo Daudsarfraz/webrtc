@@ -6,9 +6,11 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaStreamError
 import gi
 import numpy as np
+import av 
+from av.video.frame import VideoFrame
 
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst, GLib
+from gi.repository import Gst #, GLib
 
 # Initialize GStreamer
 Gst.init(None)
@@ -47,29 +49,46 @@ class GStreamerTrack(VideoStreamTrack):
     def on_new_sample(self, sink):
         logging.debug("New sample received.")
         sample = sink.emit("pull-sample")
+
         if sample:
             buffer = sample.get_buffer()
-            # Put the buffer into the queue for asynchronous retrieval
-            asyncio.ensure_future(self.queue.put(buffer))
+            if buffer:
+                buffer_size = buffer.get_size()
+                logging.debug(f"Buffer size: {buffer_size}")  # Check buffer size
+                if buffer_size == 0:
+                    logging.error("Received empty buffer!")
+                else:
+                    logging.debug(f"Valid buffer received: {buffer_size} bytes")
+                    asyncio.ensure_future(self.queue.put(buffer))
+
         return Gst.FlowReturn.OK
 
-    async def recv(self):
-        try:
-            frame = await self.queue.get()
-            logging.debug("Frame retrieved from queue.")
-            # Convert the Gst buffer to a numpy array
-            frame_data = frame.extract_dup(0, frame.get_size())
-            frame_image = np.ndarray(
-                (480, 640, 3),  # Dimensions (height, width, channels)
-                dtype=np.uint8,
-                buffer=frame_data,
-            )
-            return frame_image
-        except MediaStreamError:
-            logging.error("MediaStreamError: Stopping pipeline.")
-            self.pipeline.set_state(Gst.State.NULL)
-            raise
+async def recv(self):
+    try:
+        frame = await self.queue.get()
+        logging.debug("Frame retrieved from queue.")
 
+        # Convert the Gst buffer to a numpy array
+        frame_data = frame.extract_dup(0, frame.get_size())
+        frame_image = np.ndarray(
+            (480, 640, 3),  # Ensure correct shape
+            dtype=np.uint8,
+            buffer=frame_data,
+        )
+
+        # Convert to aiortc-compatible VideoFrame
+        video_frame = VideoFrame.from_ndarray(frame_image, format="yuv420p")
+
+        # Ensure correct timestamps
+        video_frame.pts = None  # You can adjust the timestamp logic
+        video_frame.time_base = "1/90000"  # Standard for WebRTC
+
+        return video_frame
+
+    except MediaStreamError:
+        logging.error("MediaStreamError: Stopping pipeline.")
+        self.pipeline.set_state(Gst.State.NULL)
+        raise
 
 async def index(request):
     html = """
@@ -130,9 +149,14 @@ async def offer(request):
             await pc.close()
             pcs.discard(pc)
 
-    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"
+    rtsp_url = "rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"
     video_track = GStreamerTrack(rtsp_url)
     pc.addTrack(video_track)
+
+    # Add the track event handler here inside the `offer` function
+    @pc.on("track")
+    async def on_track(track):
+        logging.debug(f"New track received: {track.kind}")
 
     # Set up the remote description
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
@@ -143,9 +167,7 @@ async def offer(request):
         if transceiver.receiver and transceiver.receiver.track:
             track = transceiver.receiver.track
             if track.kind == "video":
-                if transceiver.direction is None:
-                    # Set direction for video track if it's None
-                    transceiver.direction = "recvonly"  # You can change it to "sendrecv" if needed
+                transceiver.direction = "sendrecv"  # Ensure video track is properly received
                 logging.debug(f"Set direction {transceiver.direction} for {track.kind} track.")
             else:
                 logging.warning(f"Track is not video in transceiver")
@@ -173,14 +195,10 @@ async def offer(request):
     return web.json_response(
         {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
     )
-
-
-
 async def on_shutdown(app):
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
     pcs.clear()
-
 
 # Function to display frames using OpenCV (cv2)
 async def display_frame(rtsp_url):
@@ -199,7 +217,6 @@ async def display_frame(rtsp_url):
 
     cv2.destroyAllWindows()
 
-
 # Main Application
 app = web.Application()
 app.router.add_get("/", index)
@@ -207,7 +224,7 @@ app.router.add_post("/offer", offer)
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"
+    rtsp_url = "rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"#"rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"
     loop = asyncio.get_event_loop()
     #loop.create_task(display_frame(rtsp_url))
     web.run_app(app, port=8080)
