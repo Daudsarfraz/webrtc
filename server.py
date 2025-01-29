@@ -203,6 +203,7 @@ async def offer(request):
         print("\n ==================== Try 2 ========================== \n")
         # Create the answer
         answer = await pc.createAnswer()
+        print(f" Create Answer in TRY 2 {answer}")
         logging.debug(f"Created answer: {answer.sdp}")
         print(f"\n ============= answer.sdp in Try 2 {answer.sdp} ============== \n")
     except Exception as e:
@@ -219,11 +220,29 @@ async def offer(request):
         async def on_icecandidate(candidate):
             print(f"New ICE candidate: {candidate}")
         # Wait until ICE gathering is complete
+
+        timeout = 10  # Time limit in seconds
+        start_time = asyncio.get_event_loop().time()
         count = 0
+
         while pc.iceGatheringState != "complete":
+            elapsed_time = asyncio.get_event_loop().time() - start_time
+            if elapsed_time > timeout:
+                print(f"ICE gathering timed out after {timeout} seconds, bypassing...")
+                break  # Exit the loop if the timeout is reached
+
             print(f"Waiting for ICE gathering to complete... {count}")
-            count +=1
-            await asyncio.sleep(0.5)
+            count += 1
+            await asyncio.sleep(0.5)  # Wait for 0.5 seconds before checking again
+
+
+        @pc.on("icecandidate")
+        async def on_icecandidate(candidate):
+            if candidate:
+                print(f"ICE Candidate Found: {candidate}")
+            else:
+                print("ICE Candidate gathering completed!")
+
 
         await pc.setLocalDescription(answer)
         print(f"Answer AFTER ============== TRY 3 {pc.setLocalDescription(answer)}")
