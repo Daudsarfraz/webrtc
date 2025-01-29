@@ -179,7 +179,7 @@ async def offer(request):
         if transceiver.receiver and transceiver.receiver.track:
             track = transceiver.receiver.track
             if track.kind == "video":
-                transceiver.direction = "sendrecv"  # Ensure video track is properly received
+                transceiver.direction = "sendonly"  # Ensure video track is properly received
                 logging.debug(f"Set direction {transceiver.direction} for {track.kind} track.")
             else:
                 logging.warning(f"Track is not video in transceiver")
