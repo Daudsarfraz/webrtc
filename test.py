@@ -31,7 +31,9 @@ def test_rtsp_stream(rtsp_url, width=320, height=240):
     cv2.destroyAllWindows()
 
 # RTSP URL to test
-rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with your RTSP URL
+# rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with your RTSP URL
+rtsp_url = "rtsp://getptz:a10alb8q9jz8jJiD@93.122.231.135:9554/ISAPI/Streaming/channels/102"  # Replace with your RTSP URL
+
 
 # Run the test with a resize to 640x480 (240, 320, 3),  # Ensure correct shape (height, width, channels)
 

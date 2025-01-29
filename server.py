@@ -28,6 +28,9 @@ class GStreamerTrack(VideoStreamTrack):
         self.queue = asyncio.Queue()
         self.loop = asyncio.get_event_loop()
         self.loop.create_task(self.start_pipeline())
+        # self.loop.create_task(self.on_new_sample())
+
+        
 
     async def start_pipeline(self):
         pipeline_description = f"""
@@ -45,6 +48,8 @@ class GStreamerTrack(VideoStreamTrack):
         appsink.connect("new-sample", self.on_new_sample)
         self.pipeline.set_state(Gst.State.PLAYING)
         logging.debug("Pipeline started.")
+        print("========================= Done with Start pipeline ============================= \n\n")
+
 
     def on_new_sample(self, sink):
         print("Enter into On-New-Sample:::::")
@@ -66,7 +71,7 @@ class GStreamerTrack(VideoStreamTrack):
         return Gst.FlowReturn.OK
 
     async def recv(self):
-        print("Enter into Recv:::::")
+        print("Enter into Recv ==================== \n\n")
         try:
             frame = await self.queue.get()
             logging.debug("Frame retrieved from queue.")
@@ -94,6 +99,7 @@ class GStreamerTrack(VideoStreamTrack):
         except MediaStreamError:
             logging.error("MediaStreamError: Stopping pipeline.")
             self.pipeline.set_state(Gst.State.NULL)
+            print("\n Recv Done ==================================== \n")
             raise
 
 
@@ -146,7 +152,7 @@ async def index(request):
     return web.Response(content_type="text/html", text=html)
 
 async def offer(request):
-    print("Entered into Offer function:::::")
+    print("\n =============== Entered into Offer function ==============\n")
     params = await request.json()
     pc = RTCPeerConnection()
     pcs.add(pc)
@@ -159,7 +165,8 @@ async def offer(request):
 
     rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with actual URL
     video_track = GStreamerTrack(rtsp_url)
-    pc.addTrack(video_track)
+    print("\n ================== GStreamer called ====================== \n")
+    # pc.addTrack(video_track)
 
     # Add the track event handler here inside the `offer` function
     @pc.on("track")
@@ -168,6 +175,7 @@ async def offer(request):
 
     # Set up the remote description
     try:
+        print("\n ======================== Try 1 ============================ \n")
         offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
         await pc.setRemoteDescription(offer)
     except Exception as e:
@@ -189,6 +197,7 @@ async def offer(request):
     logging.debug(f"Received offer: {params['sdp']}")
 
     try:
+        print("\n ==================== Try 2 ========================== \n")
         # Create the answer
         answer = await pc.createAnswer()
         logging.debug(f"Created answer: {answer.sdp}")
@@ -197,32 +206,36 @@ async def offer(request):
         raise
 
     try:
+        print("\n =================== Try 3 ============================ \n")
         # Set the local description with the answer
+        logging.info(f"answer {answer}")
         await pc.setLocalDescription(answer)
         logging.debug(f"Set local description: {answer.sdp}")
     except Exception as e:
         logging.error(f"Error setting local description: {e}")
         raise
 
+    print("\n =============== Offer Function ==================== \n")
     return web.json_response(
         {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
     )
 
 
 async def on_shutdown(app):
-    print("Entered into On-Shutdown Function::::")
+    print("\n Entered into On-Shutdown Function::::: \n ")
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
+    print("\n Done with On Shutdown ================== \n")
     pcs.clear()
 
 # Function to display frames using OpenCV (cv2)
 async def display_frame(rtsp_url):
-    print("Entered in Display Frame Function:::::")
+    print("\n Entered in Display Frame Function::::: \n ")
     video_track = GStreamerTrack(rtsp_url)
 
     while True:
         frame = await video_track.recv()
-
+        print(frame)
         if frame is not None:
             frame_resized = cv2.resize(frame.to_ndarray(format="bgr24"), (240, 320))
             cv2.imshow("RTSP Stream", frame_resized)
@@ -240,10 +253,10 @@ app.router.add_post("/offer", offer)
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    print("Starting point:::::")
+    print("\n ========= Starting point:::::============= \n")
     rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with actual RTSP URL
     loop = asyncio.get_event_loop()
-    # loop.create_task(display_frame(rtsp_url))  # To display frames using OpenCV
+    loop.create_task(display_frame(rtsp_url))  # To display frames using OpenCV
     web.run_app(app, port=8080)
 
 
