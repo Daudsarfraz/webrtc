@@ -1,6 +1,6 @@
 import cv2
 
-def test_rtsp_stream(rtsp_url, width=640, height=480):
+def test_rtsp_stream(rtsp_url, width=320, height=240):
     # Open RTSP stream using OpenCV
     cap = cv2.VideoCapture(rtsp_url)
 
@@ -33,5 +33,6 @@ def test_rtsp_stream(rtsp_url, width=640, height=480):
 # RTSP URL to test
 rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with your RTSP URL
 
-# Run the test with a resize to 640x480
-test_rtsp_stream(rtsp_url, width=640, height=480)
+# Run the test with a resize to 640x480 (240, 320, 3),  # Ensure correct shape (height, width, channels)
+
+test_rtsp_stream(rtsp_url, width=320, height=240)
