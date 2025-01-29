@@ -33,6 +33,7 @@ class GStreamerTrack(VideoStreamTrack):
         
 
     async def start_pipeline(self):
+        print("\n============ Entered into Start pipeline Function ===================\n")
         pipeline_description = f"""
         rtspsrc location={self.rtsp_url} latency=100 protocols=tcp !
         rtph264depay !
@@ -48,11 +49,11 @@ class GStreamerTrack(VideoStreamTrack):
         appsink.connect("new-sample", self.on_new_sample)
         self.pipeline.set_state(Gst.State.PLAYING)
         logging.debug("Pipeline started.")
-        print("========================= Done with Start pipeline ============================= \n\n")
+        print("\n ===================== Done with Start pipeline =================== \n\n")
 
 
     def on_new_sample(self, sink):
-        print("Enter into On-New-Sample:::::")
+        print("\n ================ Enter into On-New-Sample =============== \n")
         logging.debug("New sample received.")
         sample = sink.emit("pull-sample")
 
@@ -67,11 +68,13 @@ class GStreamerTrack(VideoStreamTrack):
                 else:
                     logging.debug(f"Valid buffer received: {buffer_size} bytes")
                     asyncio.ensure_future(self.queue.put(buffer))
+        print("\n ================ Done with On-New-Sample =============== \n")
+
 
         return Gst.FlowReturn.OK
 
     async def recv(self):
-        print("Enter into Recv ==================== \n\n")
+        print("\n ============ Enter into Recv ==================== \n\n")
         try:
             frame = await self.queue.get()
             logging.debug("Frame retrieved from queue.")
@@ -99,7 +102,7 @@ class GStreamerTrack(VideoStreamTrack):
         except MediaStreamError:
             logging.error("MediaStreamError: Stopping pipeline.")
             self.pipeline.set_state(Gst.State.NULL)
-            print("\n Recv Done ==================================== \n")
+            print("\n ======================== Recv Done ======================= \n")
             raise
 
 
@@ -166,7 +169,7 @@ async def offer(request):
     rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with actual URL
     video_track = GStreamerTrack(rtsp_url)
     print("\n ================== GStreamer called ====================== \n")
-    # pc.addTrack(video_track)
+    pc.addTrack(video_track) # used to send VideoTrack to other Peer 
 
     # Add the track event handler here inside the `offer` function
     @pc.on("track")
@@ -187,7 +190,7 @@ async def offer(request):
         if transceiver.receiver and transceiver.receiver.track:
             track = transceiver.receiver.track
             if track.kind == "video":
-                transceiver.direction = "sendonly"  # Ensure video track is properly received
+                transceiver.direction = "sendrecv"  # Change from "sendonly" to "sendrecv"
                 logging.debug(f"Set direction {transceiver.direction} for {track.kind} track.")
             else:
                 logging.warning(f"Track is not video in transceiver")
@@ -201,6 +204,7 @@ async def offer(request):
         # Create the answer
         answer = await pc.createAnswer()
         logging.debug(f"Created answer: {answer.sdp}")
+        print(f"\n ============= answer.sdp in Try 2 {answer.sdp} ============== \n")
     except Exception as e:
         logging.error(f"Error creating answer: {e}")
         raise
@@ -209,7 +213,21 @@ async def offer(request):
         print("\n =================== Try 3 ============================ \n")
         # Set the local description with the answer
         logging.info(f"answer {answer}")
+        print(f"Answer in TRY 3 {answer}")
+
+        @pc.on("icecandidate")
+        async def on_icecandidate(candidate):
+            print(f"New ICE candidate: {candidate}")
+        # Wait until ICE gathering is complete
+        count = 0
+        while pc.iceGatheringState != "complete":
+            print(f"Waiting for ICE gathering to complete... {count}")
+            count +=1
+            await asyncio.sleep(0.5)
+
         await pc.setLocalDescription(answer)
+        print(f"Answer AFTER ============== TRY 3 {pc.setLocalDescription(answer)}")
+
         logging.debug(f"Set local description: {answer.sdp}")
     except Exception as e:
         logging.error(f"Error setting local description: {e}")
@@ -222,10 +240,10 @@ async def offer(request):
 
 
 async def on_shutdown(app):
-    print("\n Entered into On-Shutdown Function::::: \n ")
+    print("\n =================== Entered into On-Shutdown Function ====================== \n ")
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
-    print("\n Done with On Shutdown ================== \n")
+    print("\n ================ Done with On Shutdown ================== \n")
     pcs.clear()
 
 # Function to display frames using OpenCV (cv2)
@@ -253,7 +271,7 @@ app.router.add_post("/offer", offer)
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    print("\n ========= Starting point:::::============= \n")
+    print("\n ========= Starting point ============= \n")
     rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with actual RTSP URL
     loop = asyncio.get_event_loop()
     loop.create_task(display_frame(rtsp_url))  # To display frames using OpenCV
