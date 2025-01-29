@@ -31,7 +31,7 @@ class GStreamerTrack(VideoStreamTrack):
 
     async def start_pipeline(self):
         pipeline_description = f"""
-        rtspsrc location={self.rtsp_url} latency=200 protocols=tcp !
+        rtspsrc location={self.rtsp_url} latency=500 protocols=tcp !
         rtph264depay !
         decodebin !
         videoconvert !
@@ -47,6 +47,7 @@ class GStreamerTrack(VideoStreamTrack):
         logging.debug("Pipeline started.")
 
     def on_new_sample(self, sink):
+        print("Enter into On-New-Sample:::::")
         logging.debug("New sample received.")
         sample = sink.emit("pull-sample")
 
@@ -55,6 +56,7 @@ class GStreamerTrack(VideoStreamTrack):
             if buffer:
                 buffer_size = buffer.get_size()
                 logging.debug(f"Buffer size: {buffer_size}")  # Check buffer size
+
                 if buffer_size == 0:
                     logging.error("Received empty buffer!")
                 else:
@@ -64,6 +66,7 @@ class GStreamerTrack(VideoStreamTrack):
         return Gst.FlowReturn.OK
 
     async def recv(self):
+        print("Enter into Recv:::::")
         try:
             frame = await self.queue.get()
             logging.debug("Frame retrieved from queue.")
@@ -71,13 +74,16 @@ class GStreamerTrack(VideoStreamTrack):
             # Convert the Gst buffer to a numpy array
             frame_data = frame.extract_dup(0, frame.get_size())
             frame_image = np.ndarray(
-                (480, 640, 3),  # Ensure correct shape
+                (480, 640, 3),  # Ensure correct shape (height, width, channels)
                 dtype=np.uint8,
                 buffer=frame_data,
             )
 
+            # Convert the frame to a format that aiortc can handle (YUV420P)
+            frame_yuv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2YUV_I420)
+
             # Convert to aiortc-compatible VideoFrame
-            video_frame = VideoFrame.from_ndarray(frame_image, format="yuv420p")
+            video_frame = VideoFrame.from_ndarray(frame_yuv, format="yuv420p")
 
             # Ensure correct timestamps
             video_frame.pts = None  # You can adjust the timestamp logic
@@ -140,6 +146,7 @@ async def index(request):
     return web.Response(content_type="text/html", text=html)
 
 async def offer(request):
+    print("Entered into Offer function:::::")
     params = await request.json()
     pc = RTCPeerConnection()
     pcs.add(pc)
@@ -150,7 +157,7 @@ async def offer(request):
             await pc.close()
             pcs.discard(pc)
 
-    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0" # Replace with actual URL
+    rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with actual URL
     video_track = GStreamerTrack(rtsp_url)
     pc.addTrack(video_track)
 
@@ -203,19 +210,21 @@ async def offer(request):
 
 
 async def on_shutdown(app):
+    print("Entered into On-Shutdown Function::::")
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
     pcs.clear()
 
 # Function to display frames using OpenCV (cv2)
 async def display_frame(rtsp_url):
+    print("Entered in Display Frame Function:::::")
     video_track = GStreamerTrack(rtsp_url)
 
     while True:
         frame = await video_track.recv()
 
         if frame is not None:
-            frame_resized = cv2.resize(frame, (640, 480))
+            frame_resized = cv2.resize(frame.to_ndarray(format="bgr24"), (640, 480))
             cv2.imshow("RTSP Stream", frame_resized)
 
             # Check for 'q' key press to exit the loop
@@ -231,7 +240,10 @@ app.router.add_post("/offer", offer)
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
+    print("Starting point:::::")
     rtsp_url = "rtsp://admin:office2121@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"  # Replace with actual RTSP URL
     loop = asyncio.get_event_loop()
-    # loop.create_task(display_frame(rtsp_url))  # Uncomment to display frames using OpenCV
+    # loop.create_task(display_frame(rtsp_url))  # To display frames using OpenCV
     web.run_app(app, port=8080)
+
+
