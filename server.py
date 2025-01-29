@@ -31,7 +31,7 @@ class GStreamerTrack(VideoStreamTrack):
 
     async def start_pipeline(self):
         pipeline_description = f"""
-        rtspsrc location={self.rtsp_url} latency=500 protocols=tcp !
+        rtspsrc location={self.rtsp_url} latency=100 protocols=tcp !
         rtph264depay !
         decodebin !
         videoconvert !
